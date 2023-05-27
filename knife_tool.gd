@@ -17,9 +17,9 @@ const POLYGON_EDITOR_CLASSES = [
 #"Path2DEditor"
 ];
 
-const KNIFE_TOOL_BUTTON_SCENE = preload("res://addons/knife-tool/knife_tool_button.tscn");
+const KNIFE_TOOL_BUTTON_SCENE = preload("res://addons/polygon-pivot-tool/knife_tool_button.tscn");
 
-const POINT_SIZE = 5;
+const POINT_SIZE = 7;
 const LINE_WIDTH = 3;
 
 const CONSUME = true;
@@ -37,9 +37,11 @@ enum States {
 var knife_tool_button = null;
 
 var current_state;
+var polygon = null
 var selected_polygon = null;
 var points = [];
 var mouse_position = Vector2.ZERO;
+var pivot = Vector2.ZERO;
 
 
 func _enter_tree():
@@ -101,8 +103,12 @@ func on_editor_selection_changed():
 
 	if nodes.size() == 1 and _handles(nodes.front()):
 		selected_polygon = nodes.front();
+		polygon = get_polygon_data(selected_polygon);
+		for i in polygon.size():
+			polygon[i] = selected_polygon.get_global_transform() * polygon[i]
 	else:
 		selected_polygon = null;
+		polygon = null
 		current_state = States.WAIT;
 		
 
@@ -119,10 +125,11 @@ func is_valid_node_for_knife_tool(n):
 
 
 func _handles(object):
-	print("calling handles")
 	if is_valid_node_for_knife_tool(object):
-		print("We handle this object")
 		selected_polygon = object;
+		polygon = get_polygon_data(selected_polygon);
+		for i in polygon.size():
+			polygon[i] = selected_polygon.get_global_transform() * polygon[i]
 		return true;
 #	elif object.get_class() == "MultiNodeEdit":
 #		var can_handle = true;
@@ -132,8 +139,8 @@ func _handles(object):
 #				break;
 #		return can_handle;
 	else:
-		print("we do not handle object of type " + str(object))
 		selected_polygon = null;
+		polygon = null
 		current_state = States.WAIT;
 		return false;
 
@@ -144,14 +151,22 @@ func from_editor_to_2d_scene_coordinates( position ):
 func from_2d_scene_to_editor_coordinates( position ):
 	return selected_polygon.get_viewport_transform() * position;
 
+func average(vecarray) -> Vector2:
+	var count = Vector2.ZERO
+	for i in vecarray:
+		count+=i
+	return count/len(vecarray)
 
-func _forward_canvas_gui_input(event) -> bool:
-
+func _forward_canvas_gui_input(event) -> bool: #NOTE - the important bit
+	var newposition = null
 	if current_state == States.WAIT: 
 		return DONT_CONSUME;
 	
 	if event is InputEventMouse:
 		mouse_position = event.position;
+		newposition = from_editor_to_2d_scene_coordinates(mouse_position)
+		#newposition = from_editor_to_2d_scene_coordinates(event.position)
+		
 
 	if current_state == States.SLICE:
 		update_overlays();
@@ -162,11 +177,38 @@ func _forward_canvas_gui_input(event) -> bool:
 			current_state = States.SLICE;
 
 			var mouse_pos_in_scene = selected_polygon.get_global_mouse_position();
-			points.push_back(event.position);
+			points = []
+			points.append(newposition);
+			pivot = average(points)
 			return CONSUME;
-
+			
 		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-			cancel_slice();
+			var nearestpt = INF
+			var nearestvec = null
+			for i in polygon:
+				var tmp = newposition.distance_squared_to(i)
+				if tmp < nearestpt:
+					nearestpt = tmp
+					nearestvec = i
+			if nearestpt < 500 :
+				if nearestvec in points:
+					points.erase(nearestvec)
+				else:
+					points.append(nearestvec)
+			else:
+				nearestpt = INF
+				nearestvec = null
+				for i in points: # toggle point
+					var tmp = newposition.distance_squared_to(i)
+					if tmp < nearestpt:
+						nearestpt = tmp
+						nearestvec = i
+				if nearestpt < 100:
+					points.erase(nearestvec)
+				else:
+					points.append(newposition)
+					
+			pivot = average(points)
 			return CONSUME;
 		
 
@@ -175,6 +217,7 @@ func _forward_canvas_gui_input(event) -> bool:
 		if event is InputEventKey:
 			
 			if event.physical_keycode == KEY_ENTER and event.pressed:
+				pivot = average(points)
 				confirm_slice();
 				return CONSUME;
 			
@@ -187,12 +230,13 @@ func _forward_canvas_gui_input(event) -> bool:
 func _forward_canvas_draw_over_viewport(overlay):
 
 	if not points.is_empty():
-		for i in points.size() - 1:
-			overlay.draw_circle(points[i], POINT_SIZE, Color.RED);
-			overlay.draw_line(points[i], points[i+1], Color.RED, LINE_WIDTH);
+		for i in points.size():
+			overlay.draw_circle(from_2d_scene_to_editor_coordinates(points[i]), POINT_SIZE, Color.RED);
+			#overlay.draw_line(points[i], points[i+1], Color.RED, LINE_WIDTH);
+		overlay.draw_circle(from_2d_scene_to_editor_coordinates(pivot), POINT_SIZE, Color.BLUE);
 		
-		overlay.draw_circle(points.back(), POINT_SIZE, Color.RED);
-		overlay.draw_line(points.back(), mouse_position, Color.RED, LINE_WIDTH);
+		#overlay.draw_circle(points.back(), POINT_SIZE, Color.RED);
+		#overlay.draw_line(points.back(), mouse_position, Color.RED, LINE_WIDTH);
 
 
 func confirm_slice():
@@ -205,162 +249,21 @@ func confirm_slice():
 	for i in scene_points.size():
 		scene_points[i] = from_editor_to_2d_scene_coordinates(scene_points[i]);
 
-	# transform
-	var polygon = get_polygon_data(selected_polygon);
-	for i in polygon.size():
-		polygon[i] = selected_polygon.get_global_transform() * polygon[i];
-
-	# Check if it is hole:
-#	var are_all_points_inside_selected_polygon = true;
-#	for p in scene_points:
-#		if not Geometry.is_point_in_polygon(p, polygon):
-#			are_all_points_inside_selected_polygon = false;
-#			break;
-#
-#	# this only works for convex polygons
-#	if are_all_points_inside_selected_polygon:
-#		if scene_points.size() < 3:
-#
-#			abort_slice("Invalid input: hole must have at least 3 points");
-#			return;
-#
-#			var hole_points = scene_points.duplicate();
-#
-#			var hole_orientation = get_polygon_orientation(scene_points);
-#			var polygon_orientation = get_polygon_orientation(polygon);
-#			var step = hole_orientation * polygon_orientation;
-#
-#			var hole = selected_polygon.duplicate(true);
-#			set_polygon_data(hole, scene_points);
-#
-#			if step > 0:
-#				hole_points.invert();
-
-	if (Geometry2D.is_point_in_polygon(scene_points.front(), polygon) or 
-		Geometry2D.is_point_in_polygon(scene_points.back(), polygon)):
-			abort_slice("Invalid input: Both start and end point of the cut must lie outside the polygon");
-			return;
+	for i in len(selected_polygon.polygon):
+		print(i)
+		selected_polygon.polygon[i] -= pivot - selected_polygon.global_position;
+	selected_polygon.global_position = pivot
 	
-
-
-	# returns an array of clipped polylines
-	var intersections : Array = Geometry2D.intersect_polyline_with_polygon(scene_points, polygon);
-	
-	if intersections.is_empty():
-		abort_slice("Cut didn't intersect the selected polygon");
-		return;
-
-	var polygons_to_check = [];
-	var polygons_to_check_for_next_iteration = [selected_polygon];
-
-	for intersection_index in intersections.size():
-		polygons_to_check = polygons_to_check_for_next_iteration;
-		polygons_to_check_for_next_iteration = [];
-
-		for current_polygon in polygons_to_check:
-
-			var intersection = intersections[intersection_index];
-			
-			if intersection_index > 0:
-				polygon = get_polygon_data(current_polygon);
-				for i in polygon.size():
-					polygon[i] = current_polygon.get_global_transform() * polygon[i];
-				intersection = Geometry2D.intersect_polyline_with_polygon(intersection, polygon);
-				assert(intersection.size() < 2);
-
-				if intersection.is_empty():
-					print("Empty intersection, pushing polygon for next iteration")
-					polygons_to_check_for_next_iteration.push_back(current_polygon);
-					continue;
-
-				elif intersection.size() == 1:
-					intersection = intersection.front();
-
-			# check if the polyline is self-intersecating
-			# I assume that adjacent segments of the polyline don't intersecate (possible only if they are superimposed)
-			# TODO: disallow superimposed segments.
-			var self_intersect = false;
-			for i in range(0, intersection.size() - 2, 1):
-				for j in range(i + 2, intersection.size() - 1, 1):
-					var res = Geometry2D.segment_intersects_segment(
-						intersection[i], intersection[i+1],
-						intersection[j], intersection[j+1]);
-					
-					if res != null:
-						self_intersect = true;
-		
-			if self_intersect:
-				abort_slice("Cut does self-intersect inside the polygon!");
-				return;
-	
-			var intersection_point_a = intersection[0];
-			var intersection_point_b = intersection[intersection.size() - 1];
-
-			var does_intersect = false;
-			for extreme in [intersection_point_a, intersection_point_b]:
-				for i in polygon.size():
-					var next_index = posmod(i + 1, polygon.size());
-
-					var point_on_segment = Geometry2D.get_closest_point_to_segment(
-						extreme,
-						polygon[i], polygon[next_index]);
-
-					# check if the cut pass through the polygon vertices
-					if (polygon[i].distance_to(extreme) < THRESHOLD or
-						polygon[next_index].distance_to(extreme) < THRESHOLD):
-						does_intersect = true;
-
-					elif point_on_segment.distance_to(extreme) < THRESHOLD:
-						does_intersect = true;
-						polygon.insert(next_index, point_on_segment);
-						break;
-
-			if not does_intersect:
-				polygons_to_check_for_next_iteration.push_back(current_polygon);
-				continue;
-
-			var intersection_point_a_index = 0;
-			while polygon[intersection_point_a_index].distance_to(intersection_point_a) > THRESHOLD:
-				intersection_point_a_index += 1;
-
-			for step in [1, -1]:
-				var polyslice = [];
-
-				var index = intersection_point_a_index;
-				while polygon[index].distance_to(intersection_point_b) > THRESHOLD:
-					polyslice.append(polygon[index]);
-					index = posmod(index + step, polygon.size());
-				
-				polyslice.append(intersection_point_b);
-				
-				var internal_points_index = intersection.size() - 2;
-				while internal_points_index > 0:
-					polyslice.append( intersection[internal_points_index]);
-					internal_points_index -= 1;
-		
-				for i in polyslice.size():
-					polyslice[i] = current_polygon.get_global_transform().inverse() * polyslice[i];
-				
-				polygons_to_check_for_next_iteration.push_back(
-					create_new_polygon(current_polygon, polyslice)
-				);
-			
-			if current_polygon != selected_polygon:
-				current_polygon.free();
-
-	var polygons_added_by_knife_tool = polygons_to_check_for_next_iteration;
+	var new_poly = selected_polygon
 	var undo_redo = get_undo_redo();
 	var parent = selected_polygon.get_parent();
 
 	undo_redo.create_action("Sliced Polygon");
 	
 	undo_redo.add_undo_reference(selected_polygon);
-	for p in polygons_added_by_knife_tool:
-		undo_redo.add_do_reference(p);
-		parent.remove_child(p);
 	
-	undo_redo.add_do_method(self, "do_split_polygon", selected_polygon, parent, polygons_added_by_knife_tool);
-	undo_redo.add_undo_method(self, "undo_split_polygon", selected_polygon, parent, polygons_added_by_knife_tool);
+	undo_redo.add_do_method(self, "do_split_polygon", selected_polygon, parent, new_poly);
+	undo_redo.add_undo_method(self, "undo_split_polygon", selected_polygon, parent, new_poly);
 	undo_redo.commit_action();
 
 
@@ -373,23 +276,11 @@ func confirm_slice():
 	
 
 func do_split_polygon(former, parent, slices):
-	var is_scene_instance = not former.scene_file_path.is_empty();
-	for s in slices:
-		parent.add_child(s);
-		if is_scene_instance:
-			s.owner = get_editor_interface().get_edited_scene_root();
-		else:
-			set_node_owner_recursively(s, get_editor_interface().get_edited_scene_root());
-	
-	parent.remove_child(former);
+	pass
 
 
 func undo_split_polygon(former, parent, slices):
-	for s in slices:
-		parent.remove_child(s);
-
-	parent.add_child(former);
-	former.owner = get_editor_interface().get_edited_scene_root();
+	pass
 
 
 func create_new_polygon(current_polygon, new_polygon_data):

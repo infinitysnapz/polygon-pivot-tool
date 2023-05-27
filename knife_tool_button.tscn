@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://db2k3b4i268m6"]
 
-[ext_resource type="Texture2D" uid="uid://cr3w6pn684lws" path="res://addons/knife-tool/knife_tool_icon.svg" id="1"]
+[ext_resource type="Texture2D" uid="uid://cr3w6pn684lws" path="res://addons/polygon-pivot-tool/knife_tool_icon.svg" id="1"]
 
 [node name="KnifeToolButton" type="Button"]
 anchors_preset = 15
