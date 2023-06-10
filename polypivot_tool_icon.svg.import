@@ -3,15 +3,15 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://cr3w6pn684lws"
-path="res://.godot/imported/knife_tool_icon.svg-6da57c5c5c161e6b22fa9eecd2b21280.ctex"
+path="res://.godot/imported/polypivot_tool_icon.svg-fe607f4535a596b2e0ea276d9ea7fc6c.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://addons/polygon-pivot-tool/knife_tool_icon.svg"
-dest_files=["res://.godot/imported/knife_tool_icon.svg-6da57c5c5c161e6b22fa9eecd2b21280.ctex"]
+source_file="res://addons/polygon-pivot-tool/polypivot_tool_icon.svg"
+dest_files=["res://.godot/imported/polypivot_tool_icon.svg-fe607f4535a596b2e0ea276d9ea7fc6c.ctex"]
 
 [params]
 

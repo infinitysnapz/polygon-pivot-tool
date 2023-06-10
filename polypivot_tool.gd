@@ -17,7 +17,7 @@ const POLYGON_EDITOR_CLASSES = [
 #"Path2DEditor"
 ];
 
-const KNIFE_TOOL_BUTTON_SCENE = preload("res://addons/polygon-pivot-tool/knife_tool_button.tscn");
+const POLYPIVOT_TOOL_BUTTON_SCENE = preload("res://addons/polygon-pivot-tool/polypivot_tool_button.tscn");
 
 const POINT_SIZE = 7;
 const LINE_WIDTH = 3;
@@ -34,7 +34,7 @@ enum States {
 	SLICE
 }
 
-var knife_tool_button = null;
+var polypivot_tool_button = null;
 
 var current_state;
 var polygon = null
@@ -48,34 +48,34 @@ func _enter_tree():
 	
 	get_editor_interface().get_selection().selection_changed.connect(self.on_editor_selection_changed)
 	
-	knife_tool_button = KNIFE_TOOL_BUTTON_SCENE.instantiate();
-	knife_tool_button.toggled.connect(on_knife_button_toggled);
-	cut_completed.connect(knife_tool_button.set_pressed.bind(false));
+	polypivot_tool_button = POLYPIVOT_TOOL_BUTTON_SCENE.instantiate();
+	polypivot_tool_button.toggled.connect(on_polypivot_button_toggled);
+	cut_completed.connect(polypivot_tool_button.set_pressed.bind(false));
 	
-	add_control_to_container(EditorPlugin.CONTAINER_CANVAS_EDITOR_MENU, knife_tool_button);
-	knife_tool_button.hide();
+	add_control_to_container(EditorPlugin.CONTAINER_CANVAS_EDITOR_MENU, polypivot_tool_button);
+	polypivot_tool_button.hide();
 	
 	var editors = get_polygon_editors();
 	for e in editors:
 		for c in e.get_children():
 			if c is Button:
 				c.pressed.connect(user_changed_tool);
-				knife_tool_button.pressed.connect(c.set_pressed_no_signal.bind(false));
+				polypivot_tool_button.pressed.connect(c.set_pressed_no_signal.bind(false));
 
 
 func _exit_tree():
 	get_editor_interface().get_selection().selection_changed.disconnect(on_editor_selection_changed);
-	remove_control_from_container(EditorPlugin.CONTAINER_CANVAS_EDITOR_MENU, knife_tool_button);
+	remove_control_from_container(EditorPlugin.CONTAINER_CANVAS_EDITOR_MENU, polypivot_tool_button);
 
 
 func user_changed_tool():
-	knife_tool_button.set_pressed_no_signal(false);
+	polypivot_tool_button.set_pressed_no_signal(false);
 	current_state = States.WAIT;
 	points.clear();
 
 
 func get_polygon_editors():
-	var parent = knife_tool_button.get_parent();
+	var parent = polypivot_tool_button.get_parent();
 	var editors = [];
 		
 	for c in parent.get_children():
@@ -85,7 +85,7 @@ func get_polygon_editors():
 	return editors;
 
 
-func on_knife_button_toggled(new_state):
+func on_polypivot_button_toggled(new_state):
 
 	if current_state == States.SLICE:
 		confirm_slice();
@@ -99,7 +99,7 @@ func on_knife_button_toggled(new_state):
 func on_editor_selection_changed():
 
 	var nodes = get_editor_interface().get_selection().get_selected_nodes();
-	knife_tool_button.button_pressed = false;
+	polypivot_tool_button.button_pressed = false;
 
 	if nodes.size() == 1 and _handles(nodes.front()):
 		selected_polygon = nodes.front();
@@ -115,17 +115,17 @@ func on_editor_selection_changed():
 func _make_visible(visible):
 	print("calling make visible")
 	if visible:
-		knife_tool_button.show();
+		polypivot_tool_button.show();
 	else:
-		knife_tool_button.hide();
+		polypivot_tool_button.hide();
 
 
-func is_valid_node_for_knife_tool(n):
+func is_valid_node_for_polypivot_tool(n):
 	return (n is Polygon2D) or (n is NavigationRegion2D) or (n is CollisionPolygon2D);
 
 
 func _handles(object):
-	if is_valid_node_for_knife_tool(object):
+	if is_valid_node_for_polypivot_tool(object):
 		selected_polygon = object;
 		polygon = get_polygon_data(selected_polygon);
 		for i in polygon.size():
@@ -134,7 +134,7 @@ func _handles(object):
 #	elif object.get_class() == "MultiNodeEdit":
 #		var can_handle = true;
 #		for node in get_editor_interface().get_selection().get_selected_nodes():
-#			if not is_valid_node_for_knife_tool(node):
+#			if not is_valid_node_for_polypivot_tool(node):
 #				can_handle = false;
 #				break;
 #		return can_handle;
